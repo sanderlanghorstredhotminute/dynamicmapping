@@ -14,7 +14,8 @@ namespace DynamicMapper.Tests
         [Fact]
         public void CanParseDataTest()
         {
-            var questions = DataParser.ProcessData(GetTestData(), typeof(Question)).Cast<Question>().ToList();
+            var parser = new DataParser(new TestableDataProvider(), new ReflectionMapper());
+            var questions = parser.ProcessData(typeof(Question)).Cast<Question>().ToList();
 
             questions.Should().NotBeNullOrEmpty();
             questions.Should().HaveCount(5, "First row contains headers");
@@ -50,6 +51,30 @@ namespace DynamicMapper.Tests
             item.BadDescription.Should().Be("Bad 5");
         }
 
+        [Fact]
+        public void CanParseDynamicDataTest()
+        {
+            var newModel = JsonConvert.DeserializeObject<JObject>(_jsonObject);
+            var builder = new RuntimeTypeBuilder(nameof(_jsonObject));
+            
+            foreach (var property in newModel.Properties())
+            {
+                builder.Properties.Add(property.Name, GetType(property.Type));
+            }
+            
+            var modelType = builder.Compile();
+
+            var parser = new DataParser(new TestableDataProvider(), new ReflectionMapper());
+            var questions = parser.ProcessData(modelType).ToList();
+
+            questions.Should().NotBeNullOrEmpty();
+            questions.Should().HaveCount(5, "First row contains headers");
+
+            var resultString = JsonConvert.SerializeObject(questions);
+
+            resultString.Should().Be(_jsonResult);
+        }
+
         private Type GetType(JTokenType jType)
         {
             switch (jType)
@@ -71,72 +96,8 @@ namespace DynamicMapper.Tests
             }
         }
 
-        [Fact]
-        public void CanParseDynamicDataTest()
-        {
-            var newModel = JsonConvert.DeserializeObject<JObject>(_jsonObject);
-            var builder = new RuntimeTypeBuilder(nameof(_jsonObject));
-            
-            foreach (var property in newModel.Properties())
-            {
-                builder.Properties.Add(property.Name, GetType(property.Type));
-            }
-            
-            var modelType = builder.Compile();
-            
-            var questions = DataParser.ProcessData(GetTestData(), modelType).ToList();
-
-            questions.Should().NotBeNullOrEmpty();
-            questions.Should().HaveCount(5, "First row contains headers");
-
-            var resultString = JsonConvert.SerializeObject(questions);
-
-            resultString.Should().Be(_jsonResult);
-        }
-
         private const string _jsonObject = "{ \"Title\": \"\", \"GoodDescription\": \"\"}";
         private const string _jsonResult = "[{\"Title\":\"Test 1\",\"GoodDescription\":\"Good 1\"},{\"Title\":\"Test 2\",\"GoodDescription\":\"Good 2\"},{\"Title\":\"Test 3\",\"GoodDescription\":null},{\"Title\":null,\"GoodDescription\":\"Good 4\"},{\"Title\":null,\"GoodDescription\":null}]";
 
-        private IEnumerable<IEnumerable<object>> GetTestData()
-        {
-            return new List<List<object>>
-            {
-                new List<object>
-                {
-                    { "Title" },
-                    { "GoodDescription" },
-                    { "BadDescription" },
-                },
-                new List<object>
-                {
-                    { "Test 1" },
-                    { "Good 1" },
-                    { "Bad 1" }
-                },
-                new List<object>
-                {
-                    { "Test 2" },
-                    { "Good 2" }
-                },
-                new List<object>
-                {
-                    { "Test 3" },
-                    { "" },
-                    { "Bad 3" }
-                },
-                new List<object>
-                {
-                    { "" },
-                    { "Good 4" },
-                    { "Bad 4" }
-                },
-                new List<object>
-                {
-                    { "" },
-                    { "" },
-                    { "Bad 5" }
-                }
-            };
-        }
     }
 }
